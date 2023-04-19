@@ -10,9 +10,10 @@
 """
 import sys
 from matplotlib import pyplot as plt
-from typing import List
+from typing import List, Tuple
 
-import cv2 as cv2
+from typing import List
+import cv2
 import numpy as np
 
 LOAD_GRAY_SCALE = 1
@@ -20,7 +21,7 @@ LOAD_RGB = 2
 RGB2YIQ_mat = np.array([0.258, 0.347, 0.133, 0.583, -0.333, -0.456, 0.211, 0.233, 0.521]).reshape(3, 3)
 
 
-def myID() -> np.int:
+def myID() -> np.int32:
     """
     Return my ID (not the friend's ID I copied from)
     :return: int
@@ -37,30 +38,34 @@ def imReadAndConvert(filename: str, representation: int) -> np.ndarray:
     """
     img = cv2.imread(filename)
     if img is None:
-        sys.exit("cannot read the image")
-    if representation == 1:   # means that the image is in gray scale
-        img = img.convert('L')  # make it gray scale
-    if representation == 2:
-        img = img.convert('RGB')  # convert it to RGB colors
-    img = np.asarray(img)  # after convert the image to gray/RGB scale, need to make it as numpy array
-    img = img.astype(np.float)  # convert it to floating point array
-    normalized_img = normalizeData(img)  # normalize to the same scale of values the numpy array with the floating point
-    return normalized_img
+        sys.exit("could not read the image")
+    if representation == 1:
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    elif representation == 2:
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img = img.astype(float)
+    norm_img = normalizeData(img)
+    return norm_img
 
 
 
-def imDisplay(filename: str, representation: int):
+
+
+
+def imDisplay(filename: str, representation: int) :
     """
     Reads an image as RGB or GRAY_SCALE and displays it
     :param filename: The path to the image
     :param representation: GRAY_SCALE or RGB
     :return: None
     """
-    image = imReadAndConvert(filename, representation)  # step 1: convert the image into numpy array
-    cv2.imshow(filename, image)  # display the image
-    cv2.waitKey(0)  # wait for user to press something in keybord
-    cv2.destoryAllWindows()
-
+    img = imReadAndConvert(filename, representation)
+    if representation == LOAD_GRAY_SCALE:
+        plt.imshow(img, cmap='gray')
+        plt.show()
+    else:
+        plt.imshow(img)
+        plt.show()
 
 
 def transformRGB2YIQ(imgRGB: np.ndarray) -> np.ndarray:
@@ -124,86 +129,69 @@ def hsitogramEqualize(imgOrig: np.ndarray) -> (np.ndarray, np.ndarray, np.ndarra
 
 
 
-def quantizeImage(imOrig: np.ndarray, nQuant: int, nIter: int) -> (List[np.ndarray], List[float]):
+def quantize_image(im_orig: np.ndarray, n_quant: int, n_iter: int) -> Tuple[List[np.ndarray], List[float]]:
     """
-        Quantized an image in to **nQuant** colors
-        :param imOrig: The original image (RGB or Gray scale)
-        :param nQuant: Number of colors to quantize the image to
-        :param nIter: Number of optimization loops
-        :return: (List[qImage_i],List[error_i])
+    Quantizes an image into **n_quant** colors
+    :param im_orig: The original image (RGB or Grayscale)
+    :param n_quant: Number of colors to quantize the image to
+    :param n_iter: Number of optimization loops
+    :return: (List[q_image_i], List[error_i])
     """
+    is_colored = len(im_orig.shape) == 3
+    tmp_img = cv2.normalize(im_orig, None, 0, 255, cv2.NORM_MINMAX).astype('uint8')
+    hist_org, _ = np.histogram(tmp_img.flatten(), bins=256)
+    cum_sum = np.cumsum(hist_org)
+    each_slice = cum_sum.max() / n_quant
+    slices = np.zeros(n_quant + 1, dtype=int)
+    curr_sum = 0
+    curr_ind = 0
+    for i in range(1, n_quant + 1):
+        while curr_sum < each_slice and curr_ind < 256:
+            curr_sum += hist_org[curr_ind]
+            curr_ind += 1
+        if slices[i - 1] != curr_ind - 1:
+            curr_ind -= 1
+        slices[i] = curr_ind
+        curr_sum = 0
 
-    """
-    #  the next function compute the histogram of the input image
-    def compute_histogram(im, n_bins=256):
-        hist, _ = np.histogram(im, bins=n_bins, range=(0, 1))
-        return hist
+    q_images = []
+    mse_list = []
+    for i in range(n_iter):
+        quantize_img = np.zeros(tmp_img.shape)
+        qi = []
+        for j in range(1, n_quant + 1):
+            si = np.arange(slices[j-1], slices[j])
+            pi = hist_org[slices[j-1]:slices[j]]
+            avg = int((si * pi).sum() / pi.sum())
+            qi.append(avg)
 
-    #  this next function compute the cumulative distribution  of an input histogram
-    # returns the normalized cumulative histogram
-    def compute_cumulative_histogram(hist):
-        cumsum = np.cumsum(hist)
-        return cumsum / cumsum[-1]
+        for k in range(n_quant):
+            quantize_img[tmp_img > slices[k]] = qi[k]
 
-    #  this next function gets an image and 2 arrays of quantization values,
-    #  and computes the mean-squared error between the original image and the quantized image
-    def compute_error(im, z, q):
-        quantized_im = np.zeros_like(im)  # create new numpy array with the same shape as im
-        for i in range(len(z) - 1):  # iterate all over quantization intervals defined by the z values.
-            mask = (im >= z[i]) & (im < z[i + 1])
-            quantized_im[mask] = q[i]  # assigns the value of q[i] to the corresponding elements in quantized_im where the mask is true.
-        quantized_im[im >= z[-1]] = q[-1]  # sets all pixel values in quantized_im that are greater than or equal to the last quantization level in z,
-                                           # to the last quantization value in q.
-        error = np.sum(np.square(im - quantized_im))
-        return error
+        slices = [(qi[i] + qi[i + 1]) // 2 for i in range(len(qi) - 1)]
 
-    # this next function gets an image array and also another two arrays z and q
-    # and returns a new set of optimized quantization levels z_new and q_new, and also the corresponding error.
-    def find_optimal_zq(im, z, q):
-        hist = compute_histogram(im)
-        cumsum = compute_cumulative_histogram(hist)
-        z_new = np.zeros(nQuant + 1)
-        q_new = np.zeros(nQuant)
-        for i in range(1, nQuant):
-            s = np.argmax(cumsum >= i / nQuant)
-            z_new[i] = (z[s] + z[s - 1]) / 2
-            q_new[i - 1] = np.mean(im[(im >= z[s - 1]) & (im <= z[s])])   # q_new is set to the average pixel value within each interval
-        z_new[nQuant] = 1
-        return z_new, q_new, compute_error(im, z_new, q_new)
+        slices = np.insert(slices, 0, 0)
+        slices = np.append(slices, 255)
 
+        mse = np.sqrt((tmp_img - quantize_img) ** 2).mean()
+        mse_list.append(mse)
+        q_images.append(quantize_img / 255)
 
-    def quantize(im):
-        if len(im.shape) == 3:
-            yiq = transformRGB2YIQ(im)
-            y = yiq[:, :, 0]
-            z = np.linspace(0, 1, nQuant + 1)
-            q = np.linspace(0, 1, nQuant)
-            for _ in range(nIter):
-                z, q, error = find_optimal_zq(y, z, q)
-                y = np.interp(y, z, q)
-            yiq[:, :, 0] = y
-            quantized_image = transformYIQ2RGB(yiq)
-        else:
-            z = np.linspace(0, 1, nQuant + 1)
-            q = np.linspace(0, 1, nQuant)
-            for _ in range(nIter):
-                z, q, error = find_optimal_zq(im, z, q)
-                im = np.interp(im, z, q)
-            quantized_image = im
-        return quantized_image, error
+        if len(mse_list) > n_iter / 10 and all(mse_list[-1] == mse for mse in mse_list[-int(n_iter / 10):]):
+            break
 
-    ims = [imOrig]
-    errors = []
-    for i in range(nIter):
-        quantized_im, error = quantize(ims[-1])
-        ims.append(quantized_im)
-        errors.append(error)
-    plt.plot(errors)
-    plt.xlabel("Iteration")
-    plt.ylabel("Total Error")
-    plt.show()
-    return ims[1:], errors
-"""
+        tmp_img = quantize_img
+
+    if is_colored:
+        yiq_img = transformRGB2YIQ(im_orig)
+        for i, q_img in enumerate(q_images):
+            q_img_resized = cv2.resize(q_img, dsize=(im_orig.shape[1], im_orig.shape[0]), interpolation=cv2.INTER_LINEAR)
+            q_img_gray = np.mean(q_img_resized, axis=2)
+            yiq_img[:, :, 0] = q_img_gray
+            q_images[i] = transformYIQ2RGB(yiq_img)
+
+    return q_images, mse_list
+
 
 def normalizeData(data):
     return (data - np.min(data)) / (np.max(data) - np.min(data))

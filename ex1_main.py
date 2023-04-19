@@ -1,20 +1,20 @@
-from ex1_utils import *
-from gamma import gammaDisplay
+from  ex1_utils import *
 import numpy as np
 import matplotlib.pyplot as plt
 import time
-
+import warnings
+warnings.filterwarnings("ignore")
 
 def histEqDemo(img_path: str, rep: int):
     img = imReadAndConvert(img_path, rep)
     imgeq, histOrg, histEq = hsitogramEqualize(img)
 
-    # Display cumsum
-    cumsum = np.cumsum(histOrg)
-    cumsumEq = np.cumsum(histEq)
+    # Display the cum sum
+    cum_sum = np.cumsum(histOrg)
+    cum_sumEq = np.cumsum(histEq)
     plt.gray()
-    plt.plot(range(256), cumsum, 'r')
-    plt.plot(range(256), cumsumEq, 'g')
+    plt.plot(range(256), cum_sum, 'r')
+    plt.plot(range(256), cum_sumEq, 'g')
 
     # Display the images
     plt.figure()
@@ -29,7 +29,7 @@ def quantDemo(img_path: str, rep: int):
     img = imReadAndConvert(img_path, rep)
     st = time.time()
 
-    img_lst, err_lst = quantizeImage(img, 3, 20)
+    img_lst, err_lst = quantize_image(img, 3, 20)
 
     print("Time:%.2f" % (time.time() - st))
     print("Error 0:\t %f" % err_lst[0])
@@ -49,29 +49,33 @@ def main():
     print("ID:", myID())
     img_path = 'beach.jpg'
 
-    # Basic read and display
-    imDisplay(img_path, LOAD_GRAY_SCALE)
-    imDisplay(img_path, LOAD_RGB)
+    # basic read and display to the screen image in gray scale and in rgb
+    #  imDisplay(img_path, LOAD_GRAY_SCALE)
+    #  imDisplay(img_path, LOAD_RGB)
 
-    # Convert Color spaces
-    img = imReadAndConvert(img_path, LOAD_RGB)
-    yiq_img = transformRGB2YIQ(img)
+    """"
+    rgb_img = imReadAndConvert(img_path, LOAD_RGB)
+    yiq_img = transformRGB2YIQ(rgb_img)  # transform the rgb image to yiq image with numpy arrays
     f, ax = plt.subplots(1, 2)
-    ax[0].imshow(img)
-    ax[1].imshow(yiq_img)
-    plt.show()
+    ax[0].imshow(rgb_img)  # put in the left of the plot the rgb image
+    ax[1].imshow(yiq_img)  # as above, but in the right put the yiq image
+    plt.show()  # will show 2 photos side by side. the left will be in rgb and the right will be in yiq
+    
+    """
 
-    # Image histEq
-    histEqDemo(img_path, LOAD_GRAY_SCALE)
-    histEqDemo(img_path, LOAD_RGB)
+    
+    #  Image histEq
+    #  histEqDemo(img_path, LOAD_GRAY_SCALE)
+    #  histEqDemo(img_path, LOAD_RGB)
+
 
     # Image Quantization
     quantDemo(img_path, LOAD_GRAY_SCALE)
     quantDemo(img_path, LOAD_RGB)
-
+    """" 
     # Gamma
     gammaDisplay(img_path, LOAD_GRAY_SCALE)
-
+"""
 
 if __name__ == '__main__':
     main()
