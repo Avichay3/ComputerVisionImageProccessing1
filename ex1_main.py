@@ -48,7 +48,7 @@ def quantDemo(img_path: str, rep: int):
 
 def main():
     print("ID:", myID())
-    img_path = 'dark.jpg'
+    img_path = 'testImg2.jpg'
 
     # basic read and display to the screen image in gray scale and in rgb
     #  imDisplay(img_path, LOAD_GRAY_SCALE)
@@ -72,10 +72,10 @@ def main():
 
     # Image Quantization
     # quantDemo(img_path, LOAD_GRAY_SCALE)
-    quantDemo(img_path, LOAD_RGB *32)
+    #quantDemo(img_path, LOAD_RGB )
 
     # Gamma
-    # gammaDisplay(img_path, LOAD_RGB)
+    gammaDisplay(img_path, LOAD_RGB)
 
 
 if __name__ == '__main__':
